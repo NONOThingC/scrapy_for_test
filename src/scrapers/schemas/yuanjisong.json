@@ -1,0 +1,41 @@
+{
+    "name": "YuanJiSong Jobs",
+    "baseSelector": ".div_bg_color_fff.div_padding_1.hover1",
+    "fields": [
+        {
+            "name": "title",
+            "selector": ".text_type_1.line_clamp_1 b",
+            "type": "text",
+            "required": true,
+            "multiple": false
+        },
+        {
+            "name": "description",
+            "selector": ".margin_bottom_10",
+            "type": "text",
+            "required": false,
+            "multiple": false,
+            "clean": true
+        },
+        {
+            "name": "price",
+            "selector": ".rixin-text-jobs",
+            "type": "text",
+            "required": false,
+            "multiple": false
+        },
+        {
+            "name": "duration",
+            "selector": ".glyphicon-time",
+            "type": "text",
+            "required": false,
+            "multiple": false
+        }
+    ],
+    "options": {
+        "removeSelectors": [".nav", ".footer", ".advertisement"],
+        "removeScripts": true,
+        "removeStyles": true,
+        "removeComments": true
+    }
+} 

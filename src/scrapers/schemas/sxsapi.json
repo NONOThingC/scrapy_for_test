@@ -1,0 +1,45 @@
+{
+    "name": "SXSAPI Jobs",
+    "baseSelector": ".project-list .project-item, .project-grid .project-card, .job-list .job-item",
+    "fields": [
+        {
+            "name": "title",
+            "selector": "h3.project-title a, .project-name, .job-title",
+            "type": "text",
+            "required": true,
+            "multiple": false
+        },
+        {
+            "name": "description",
+            "selector": ".project-description p, .project-summary, .job-description",
+            "type": "text",
+            "required": false,
+            "multiple": false,
+            "clean": true
+        },
+        {
+            "name": "price",
+            "selector": ".project-budget, .project-price, .job-price, .budget",
+            "type": "text",
+            "required": false,
+            "multiple": false
+        },
+        {
+            "name": "duration",
+            "selector": ".project-duration, .project-timeline, .job-duration, .timeline",
+            "type": "text",
+            "required": false,
+            "multiple": false
+        }
+    ],
+    "options": {
+        "removeSelectors": [".nav", ".footer", ".advertisement", ".sidebar", ".header"],
+        "removeScripts": true,
+        "removeStyles": true,
+        "removeComments": true,
+        "waitForSelector": ".project-list, .project-grid, .job-list",
+        "magic": true,
+        "simulate_user": true,
+        "page_timeout": 60000
+    }
+} 
