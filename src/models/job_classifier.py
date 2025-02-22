@@ -14,13 +14,31 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from loguru import logger
 import re
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 import jieba
 import asyncio
 import sys
+import matplotlib as mpl
 
 from src.config.config import Config
 from tools.llm_api import query_llm, create_llm_client
+
+def convert_to_serializable(obj: Any) -> Any:
+    """Convert numpy types to Python native types for JSON serialization.
+    
+    Args:
+        obj: Object to convert
+        
+    Returns:
+        Converted object that can be JSON serialized
+    """
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
 
 class JobClassifier:
     """Classifier for analyzing and categorizing freelance job listings."""
@@ -35,7 +53,7 @@ class JobClassifier:
         self.logger = logger
         
         # Initialize sentence transformer model
-        self.model = SentenceTransformer('distiluse-base-multilingual-cased-v2')
+        self.model = SentenceTransformer('all-mpnet-base-v2')
         
         # Initialize clustering model
         self.kmeans = None
@@ -46,6 +64,45 @@ class JobClassifier:
         
         # Set style for plots
         plt.style.use('seaborn-v0_8')
+        
+        # Configure Chinese font support
+        self._setup_chinese_font()
+        
+    def _setup_chinese_font(self):
+        """Setup Chinese font support for matplotlib."""
+        # Try different Chinese fonts in order of preference
+        chinese_fonts = [
+            'Microsoft YaHei',  # Windows
+            'SimHei',          # Windows
+            'SimSun',          # Windows
+            'NSimSun',         # Windows
+            'PingFang SC',     # macOS
+            'Hiragino Sans GB', # macOS
+            'Heiti SC',        # macOS
+            'WenQuanYi Micro Hei', # Linux
+            'Droid Sans Fallback', # Linux
+            'Noto Sans CJK SC',   # Linux
+            'Source Han Sans CN'  # Linux
+        ]
+        
+        # Find the first available font
+        available_font = None
+        for font in chinese_fonts:
+            try:
+                if any(f for f in mpl.font_manager.findSystemFonts() if font.lower() in f.lower()):
+                    available_font = font
+                    break
+            except:
+                continue
+        
+        if available_font:
+            self.logger.info(f"Using Chinese font: {available_font}")
+            plt.rcParams['font.family'] = [available_font]
+        else:
+            self.logger.warning("No suitable Chinese font found. Chinese characters may not display correctly.")
+            
+        # Set fallback font
+        plt.rcParams['axes.unicode_minus'] = False  # Fix minus sign display
         
     def load_data(self) -> pd.DataFrame:
         """Load and combine data from all sources.
@@ -157,11 +214,11 @@ class JobClassifier:
         # Plot silhouette scores
         plt.figure(figsize=(10, 6))
         plt.plot(n_clusters_range, scores, 'bo-')
-        plt.xlabel('Number of Clusters')
-        plt.ylabel('Silhouette Score')
-        plt.title('Silhouette Score vs Number of Clusters')
+        plt.xlabel('聚类数量')
+        plt.ylabel('轮廓系数')
+        plt.title('轮廓系数与聚类数量关系图')
         plt.grid(True)
-        plt.savefig(Path(self.config.output_dir) / 'silhouette_scores.png')
+        plt.savefig(Path(self.config.output_dir) / 'silhouette_scores.png', dpi=300, bbox_inches='tight')
         plt.close()
         
         # Return optimal number of clusters
@@ -201,15 +258,15 @@ class JobClassifier:
                     provider="openai"
                 )
                 
-                if response:
+                if response and not response.startswith('Error:'):
                     labels.append(response.strip())
                     self.logger.info(f"Generated label for cluster {cluster_id}: {response.strip()}")
                 else:
-                    self.logger.error(f"Failed to get response for cluster {cluster_id}")
-                    labels.append(f"Cluster {cluster_id}")
+                    self.logger.error(f"Failed to get response for cluster {cluster_id}: {response}")
+                    labels.append(f"类别 {cluster_id + 1}")
             except Exception as e:
                 self.logger.error(f"Error generating label for cluster {cluster_id}: {str(e)}")
-                labels.append(f"Cluster {cluster_id}")
+                labels.append(f"类别 {cluster_id + 1}")
                 
         return labels
         
@@ -239,13 +296,13 @@ class JobClassifier:
         # Create plot
         sns.violinplot(data=df, x='cluster_label', y='price')
         plt.xticks(rotation=45, ha='right')
-        plt.xlabel('Job Category')
-        plt.ylabel('Price (¥)')
-        plt.title('Price Distribution by Job Category')
+        plt.xlabel('工作类别')
+        plt.ylabel('价格 (¥)')
+        plt.title('各类别工作价格分布')
         
-        # Save plot
+        # Save plot with high DPI and tight layout
         plt.tight_layout()
-        plt.savefig(Path(self.config.output_dir) / 'price_distributions.png')
+        plt.savefig(Path(self.config.output_dir) / 'price_distributions.png', dpi=300, bbox_inches='tight')
         plt.close()
         
     def generate_cluster_summary(self, df: pd.DataFrame, cluster_ids: np.ndarray, cluster_labels: List[str]) -> Dict:
@@ -269,11 +326,11 @@ class JobClassifier:
             
             # Calculate statistics
             stats = {
-                'size': len(cluster_df),
-                'avg_price': cluster_df['price'].mean(),
-                'median_price': cluster_df['price'].median(),
-                'min_price': cluster_df['price'].min(),
-                'max_price': cluster_df['price'].max(),
+                'size': int(len(cluster_df)),  # Convert numpy.int64 to int
+                'avg_price': float(cluster_df['price'].mean()),  # Convert numpy.float64 to float
+                'median_price': float(cluster_df['price'].median()),
+                'min_price': float(cluster_df['price'].min()),
+                'max_price': float(cluster_df['price'].max()),
                 'sample_titles': cluster_df['title'].sample(min(5, len(cluster_df))).tolist()
             }
             
@@ -307,11 +364,17 @@ class JobClassifier:
         # Generate summary
         summary = self.generate_cluster_summary(df, cluster_ids, cluster_labels)
         
+        # Convert numpy types to Python native types for JSON serialization
+        feature_importance = {
+            name: convert_to_serializable(value)
+            for name, value in zip(feature_names, self.kmeans.cluster_centers_.mean(axis=0))
+        }
+        
         # Save results
         results = {
             'cluster_labels': cluster_labels,
             'summary': summary,
-            'feature_importance': dict(zip(feature_names, self.kmeans.cluster_centers_.mean(axis=0)))
+            'feature_importance': feature_importance
         }
         
         with open(Path(self.config.output_dir) / 'analysis_results.json', 'w', encoding='utf-8') as f:

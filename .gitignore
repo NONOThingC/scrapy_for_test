@@ -20,3 +20,6 @@ output
 .egg-info
 job_scraper.egg-info/
 llm_api.py
+.cursor*
+all-mpnet-base-v2
+venv
